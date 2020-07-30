@@ -88,52 +88,15 @@ contract Semaphore is Verifier, IncrementalMerkleTree, Ownable, Initializable {
     }
 
     /*
-     * Initialization now handled by initialize() function
+     * @param _treeLevels The depth of the identity tree.
+     * @param _firstExternalNullifier The first identity nullifier to add.
      */
-    function initialize(uint8 _treeLevels, uint232 _firstExternalNullifier, address _newOwner) public initializer{
-      //Setup Semaphore
-      addEn(_firstExternalNullifier, true);
-
-
-      //Setup IncrementalMerkleTree
-      // Limit the Merkle tree to MAX_DEPTH levels
-      require(
-          _treeLevels > 0 && _treeLevels <= MAX_DEPTH,
-          "IncrementalMerkleTree: _treeLevels must be between 0 and 33"
-      );
-
-      /*
-         To initialise the Merkle tree, we need to calculate the Merkle root
-         assuming that each leaf is the zero value.
-
-          H(H(a,b), H(c,d))
-           /             \
-          H(a,b)        H(c,d)
-           /   \        /    \
-          a     b      c      d
-
-         `zeros` and `filledSubtrees` will come in handy later when we do
-         inserts or updates. e.g when we insert a value in index 1, we will
-         need to look up values from those arrays to recalculate the Merkle
-         root.
-       */
-      treeLevels = _treeLevels;
-
-      zeros[0] = NOTHING_UP_MY_SLEEVE_ZERO;
-
-      uint256 currentZero = NOTHING_UP_MY_SLEEVE_ZERO;
-      for (uint8 i = 1; i < _treeLevels; i++) {
-          uint256 hashed = hashLeftRight(currentZero, currentZero);
-          zeros[i] = hashed;
-          filledSubtrees[i] = hashed;
-          currentZero = hashed;
-      }
-
-      root = hashLeftRight(currentZero, currentZero);
-
-      //Setup Owned
-      _owner = _newOwner;
-      emit OwnershipTransferred(address(0), _owner);
+    constructor(uint8 _treeLevels, uint232 _firstExternalNullifier, address _newOwner)
+        IncrementalMerkleTree(_treeLevels, NOTHING_UP_MY_SLEEVE_ZERO)
+        public {
+            addEn(_firstExternalNullifier, true);
+            _owner = _newOwner;
+            emit OwnershipTransferred(address(0), _owner);
     }
 
     /*

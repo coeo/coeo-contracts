@@ -9,6 +9,10 @@ contract CoeoPaymaster is BasePaymaster{
 
   event RelayFinished(bool success, bytes context);
 
+  constructor() public {
+    _owner = msg.sender;
+  }
+  
   function acceptRelayedCall(
       GSNTypes.RelayRequest calldata relayRequest,
       bytes calldata signature,

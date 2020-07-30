@@ -51,11 +51,6 @@ contract IncrementalMerkleTree is SnarkConstants {
 
     event LeafInsertion(uint256 indexed leaf, uint256 indexed leafIndex);
 
-
-    /*
-     * Initialization is now handled by initialize() function of the parent contract
-     */
-
     /*
      * Stores the Merkle root and intermediate values (the Merkle path to the
      * the first leaf) assuming that all leaves are set to _zeroValue.
@@ -64,44 +59,44 @@ contract IncrementalMerkleTree is SnarkConstants {
      *                   be a nothing-up-my-sleeve value, so that nobody can
      *                   say that the deployer knows the preimage of an empty
      *                   leaf.
+     */
+    constructor(uint8 _treeLevels, uint256 _zeroValue) internal {
+        // Limit the Merkle tree to MAX_DEPTH levels
+        require(
+            _treeLevels > 0 && _treeLevels <= MAX_DEPTH,
+            "IncrementalMerkleTree: _treeLevels must be between 0 and 33"
+        );
 
-      constructor(uint8 _treeLevels, uint256 _zeroValue) internal {
-          // Limit the Merkle tree to MAX_DEPTH levels
-          require(
-              _treeLevels > 0 && _treeLevels <= MAX_DEPTH,
-              "IncrementalMerkleTree: _treeLevels must be between 0 and 33"
-          );
+        /*
+           To initialise the Merkle tree, we need to calculate the Merkle root
+           assuming that each leaf is the zero value.
 
-          /*
-             To initialise the Merkle tree, we need to calculate the Merkle root
-             assuming that each leaf is the zero value.
+            H(H(a,b), H(c,d))
+             /             \
+            H(a,b)        H(c,d)
+             /   \        /    \
+            a     b      c      d
 
-              H(H(a,b), H(c,d))
-               /             \
-              H(a,b)        H(c,d)
-               /   \        /    \
-              a     b      c      d
+           `zeros` and `filledSubtrees` will come in handy later when we do
+           inserts or updates. e.g when we insert a value in index 1, we will
+           need to look up values from those arrays to recalculate the Merkle
+           root.
+        */
+        
+        treeLevels = _treeLevels;
 
-             `zeros` and `filledSubtrees` will come in handy later when we do
-             inserts or updates. e.g when we insert a value in index 1, we will
-             need to look up values from those arrays to recalculate the Merkle
-             root.
+        zeros[0] = _zeroValue;
 
-          treeLevels = _treeLevels;
+        uint256 currentZero = _zeroValue;
+        for (uint8 i = 1; i < _treeLevels; i++) {
+            uint256 hashed = hashLeftRight(currentZero, currentZero);
+            zeros[i] = hashed;
+            filledSubtrees[i] = hashed;
+            currentZero = hashed;
+        }
 
-          zeros[0] = _zeroValue;
-
-          uint256 currentZero = _zeroValue;
-          for (uint8 i = 1; i < _treeLevels; i++) {
-              uint256 hashed = hashLeftRight(currentZero, currentZero);
-              zeros[i] = hashed;
-              filledSubtrees[i] = hashed;
-              currentZero = hashed;
-          }
-
-          root = hashLeftRight(currentZero, currentZero);
-      }
-    */
+        root = hashLeftRight(currentZero, currentZero);
+    }
 
     /*
      * Inserts a leaf into the Merkle tree and updates the root and filled

@@ -2,7 +2,7 @@
 pragma solidity ^0.6.2;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "../Ownable.sol";
 
 import "./interfaces/IPaymaster.sol";
 import "./interfaces/IRelayHub.sol";

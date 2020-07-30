@@ -16,19 +16,6 @@ contract Ownable is Context{
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
-     * Initialization is now handled by initialize() function of the parent contract
-     */
-
-    /**
-     * @dev Initializes the contract setting the deployer as the initial owner.
-
-      constructor () internal {
-          owner = _msgSender();
-          emit OwnershipTransferred(address(0), owner);
-      }
-    */
-
-    /**
      * @dev Returns the address of the current owner.
      */
     function owner() public view returns (address) {

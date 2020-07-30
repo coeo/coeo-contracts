@@ -67,6 +67,10 @@ npm run compileSol
 ```
 
 Run tests while still in the `contracts/` directory:
+```bash
+# Open another terminal and start Ganache
+npm run ganache
+```
 
 ```bash
 # The first command tests the Merkle tree contract and the second

@@ -19,15 +19,13 @@
         "@semaphore-contracts": "."
     },
     "dependencies": {
-        "@gnosis.pm/safe-contracts": "^1.1.1-dev.2",
         "@openzeppelin/contracts": "^3.1.0",
         "circomlib": "https://github.com/kobigurk/circomlib.git#347822604996bf25f659f96ee0f02810a1f71bb0",
         "ethers": "4.0.38",
         "ganache-cli": "^6.7.0",
         "semaphore-config": "0.0.1",
         "solc": "^0.6.12",
-        "solidity-bytes-utils": "0.0.9",
-        "web3-utils": "^1.2.11"
+        "solidity-bytes-utils": "0.0.9"
     },
     "devDependencies": {
         "@types/jest": "^24.0.20",

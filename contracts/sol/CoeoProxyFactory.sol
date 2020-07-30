@@ -1,9 +1,8 @@
 pragma solidity ^0.6.0;
-pragma experimental ABIEncoderV2;
 
 import "./upgrades/UpgradeabilityProxy.sol";
-import "./CoeoPaymaster.sol";
 import "./gsn/BaseRelayRecipient.sol";
+import "./Semaphore.sol";
 
 interface ISemaphoreVoting {
   function initialize(
@@ -18,36 +17,29 @@ interface ISemaphoreVoting {
   ) external;
 }
 
-contract CoeoProxyFactory is BaseRelayRecipient, CoeoPaymaster{
-  address semaphore;
+contract CoeoProxyFactory is BaseRelayRecipient{
   address semaphoreVoting;
   address wallet;
 
   event NewOrganisation(address indexed creator, address indexed walletContract, address indexed votingContract, address semaphoreContract);
 
-  constructor(address _semaphore, address _semaphoreVoting, address _wallet) public {
-    semaphore = _semaphore;
+  constructor(address _semaphoreVoting, address _wallet) public {
     semaphoreVoting = _semaphoreVoting;
     wallet = _wallet;
-    _addGSNRecipient(address(this));
   }
 
   function create(uint232 _epoch, uint256 _period, uint256 _quorum, uint256 _approval, uint256[] calldata _identityCommitments) external {
     uint232 firstNullifier = uint232(block.timestamp);
+    address msgSender = _msgSender();
     UpgradeabilityProxy semaphoreVotingProxy = new UpgradeabilityProxy(semaphoreVoting, '');
-    UpgradeabilityProxy semaphoreProxy = new UpgradeabilityProxy(semaphore, abi.encodeWithSelector(
-      bytes4(keccak256('initialize(uint8,uint232,address)')),
-      uint8(20),
-      firstNullifier,
-      address(semaphoreVotingProxy)
-    ));
     UpgradeabilityProxy walletProxy = new UpgradeabilityProxy(wallet, abi.encodeWithSelector(
       bytes4(keccak256('initialize(address,address)')),
       address(semaphoreVotingProxy),
-      _msgSender()
+      msgSender
     ));
+    Semaphore semaphore = new Semaphore(20, firstNullifier, address(semaphoreVotingProxy));
     ISemaphoreVoting(address(semaphoreVotingProxy)).initialize(
-      address(semaphoreProxy),
+      address(semaphore),
       address(walletProxy),
       firstNullifier,
       _epoch,
@@ -56,13 +48,7 @@ contract CoeoProxyFactory is BaseRelayRecipient, CoeoPaymaster{
       _approval,
       _identityCommitments
     );
-    _addGSNRecipient(address(semaphoreVotingProxy));
-    _addGSNRecipient(address(walletProxy));
-    emit NewOrganisation(_msgSender(), address(walletProxy), address(semaphoreVotingProxy), address(semaphoreProxy));
-  }
-
-  function _msgSender() internal override(BaseRelayRecipient, Context) view returns (address payable) {
-    return BaseRelayRecipient._msgSender();
+    emit NewOrganisation(msgSender, address(walletProxy), address(semaphoreVotingProxy), address(semaphore));
   }
 
   function versionRecipient() external view override virtual returns (string memory){

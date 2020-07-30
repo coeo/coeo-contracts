@@ -22,7 +22,7 @@
  /*
   * This contract modifies SemaphoreClient to support a voting interface
   * With that in mind, the externalNullifier variable has been renamed to
-  * voteId to improve code clarity.
+  * proposalId to improve code clarity.
   *
   */
 
@@ -32,36 +32,32 @@ import "./upgrades/Initializable.sol";
 import "./gsn/BaseRelayRecipient.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
-import "@gnosis.pm/safe-contracts/contracts/common/SelfAuthorized.sol";
 import "solidity-bytes-utils/contracts/AssertBytes.sol";
 import { Semaphore } from './Semaphore.sol';
 
-contract SemaphoreVoting is BaseRelayRecipient, Executor, Initializable, SelfAuthorized{
+contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     using SafeMath for uint256;
     //Yes signal
     bytes public constant YEA = 'YEA';
     //No signal
     bytes public constant NAY = 'NAY';
-    //New proposal signal
-    bytes public constant NEW = 'NEW';
 
     Semaphore public semaphore;
     address public wallet;
 
     struct Vote {
+      bool executed;
       uint256 start;
       uint256 yes;
       uint256 no;
-      bool executed;
-      string metadata;
+      bytes metadata;
       address executionAddress;
       uint256 executionValue;
       bytes executionData;
     }
 
     // Array of members, identified only by their identity commitments
-    uint256[] public identityCommitments;
+    uint256[] internal identityCommitments;
 
     // The minimum amount of time between new proposals
     uint232 public epoch;
@@ -75,19 +71,25 @@ contract SemaphoreVoting is BaseRelayRecipient, Executor, Initializable, SelfAut
     // The minimum percentage of total votes that must vote yes for the vote to pass
     uint256 public approval;
 
-    // A mapping of an voteId (external nullifier) to Vote struct
-    // The voteId is an external nullifier that members may signal their votes with
-    mapping (uint232 => Vote) internal votes;
+    // A mapping of an proposalId (external nullifier) to Vote struct
+    // The proposalId is an external nullifier that members may signal their votes with
+    mapping (uint232 => Vote) public votes;
 
-    mapping (uint232 => uint232) internal proposals;
+    // A mapping of proposalIndexes with proposalIds
+    mapping (uint256 => uint232) public proposals;
 
     // The proposalId acts as an external nullifier so that only members may make proposals
-    // Every new proposal deactivates the current proposalId and activates the next id
     uint232 public nextProposalId;
 
-    event VoteInitiated(uint232 indexed voteId, string metadata, address executionAddress, uint256 executionValue, bytes executionData);
-    event VoteBroadcast(uint232 indexed voteId, bytes signal);
-    event ProposalBroadcast(uint232 indexed proposalId);
+    // The proposalIndex increases by one every time a proposal is created
+    uint256 public nextProposalIndex;
+
+    event VoteInitiated(uint232 indexed proposalId, bytes metadata, address executionAddress, uint256 executionValue, bytes executionData);
+    event VoteBroadcast(uint232 indexed proposalId, bytes signal);
+    event VoteExecuted(uint232 indexed proposalId);
+    event VoteNotExecuted(uint232 indexed proposalId);
+    event MemberAdded(uint256 indexed identityCommitment);
+
 
     function initialize(
       address _semaphore,
@@ -99,12 +101,10 @@ contract SemaphoreVoting is BaseRelayRecipient, Executor, Initializable, SelfAut
       uint256 _approval,
       uint256[] calldata _identityCommitments
     ) external initializer{
-        /*
         require(_epoch >= 1 hours);
         require(_period >= 1 days);
         require(_quorum < 1e18);
         require(_approval < 1e18);
-        */
         semaphore = Semaphore(_semaphore);
         wallet = _wallet;
         nextProposalId = _firstProposalId;
@@ -126,79 +126,73 @@ contract SemaphoreVoting is BaseRelayRecipient, Executor, Initializable, SelfAut
         return identityCommitments[_index];
     }
     //Add member
-    function addMember(uint256 _leaf) external authorized {
+    function addMember(uint256 _leaf) external authorized{
       _insertIdentity(_leaf);
     }
 
     function _insertIdentity(uint256 _leaf) internal {
       semaphore.insertIdentity(_leaf);
       identityCommitments.push(_leaf);
+      emit MemberAdded(_leaf);
     }
 
     //New proposal
-    function newProposal(
-      bytes calldata _data,
-      uint256[8] calldata _proof,
-      uint256 _root,
-      uint256 _nullifiersHash,
-      uint232 _proposalId,
+    function broadcastProposal(
+      bytes calldata _metadata,
       bytes calldata _executionData,
       address _executionAddress,
       uint256 _executionValue,
-      string calldata _metadata
+      uint256[8] calldata _proof,
+      uint256 _root,
+      uint256 _nullifiersHash,
+      uint232 _proposalId
     ) external {
         require((_executionAddress == address(this)) || (_executionAddress == wallet), 'Only whitelisted addresses');
-        require(AssertBytes._equal(_data, NEW), 'Must match signal');
         require(_proposalId == nextProposalId, 'Must match current proposal id');
         require(uint232(block.timestamp) > nextProposalId, 'Cannot make proposal before epoch over');
 
-        //Broadcast signal to ensure only members may create proposals
-        semaphore.broadcastSignal(_data, _proof, _root, _nullifiersHash, _proposalId);
+        // Broadcast signal to ensure only members may create proposals
+        semaphore.broadcastSignal(_metadata, _proof, _root, _nullifiersHash, _proposalId);
 
-        //Deactivate proposalId so that only one member may emit a signal on it
-        semaphore.deactivateExternalNullifier(_proposalId);
+        // Update proposalId, proposalIndex, and add new nullifier
+        {
+          proposals[nextProposalIndex] = _proposalId;
+          nextProposalIndex += 1;
+          nextProposalId = uint232(block.timestamp) + epoch;
+          semaphore.addExternalNullifier(nextProposalId);
+        }
 
-        //Update proposalId and add new nullifier
-        nextProposalId = uint232(block.timestamp) + epoch;
-        semaphore.addExternalNullifier(nextProposalId);
-
-        //Generate external nullifier for the new vote
-        uint232 voteId = uint232(block.timestamp);
-        semaphore.addExternalNullifier(voteId);
-
-        Vote storage vote = votes[voteId];
-        vote.start = block.timestamp;
-        vote.metadata = _metadata;
-        vote.executionData = _executionData;
-        vote.executionAddress = _executionAddress;
-        vote.executionValue = _executionValue;
-
-        emit ProposalBroadcast(_proposalId);
-        emit VoteInitiated(voteId, _metadata, _executionAddress, _executionValue, _executionData);
-    }
-    //End vote
-    function finalizeProposal(uint232 _voteId) public {
-        if (votePassedOutright(_voteId) || votePassedWithTimeout(_voteId)) {
-          Vote storage vote = votes[_voteId];
-          executeCall(
-            vote.executionAddress,
-            vote.executionValue,
-            vote.executionData,
-            gasleft()
+        // Setup vote data
+        {
+          votes[_proposalId] = Vote(
+            false,
+            block.timestamp,
+            1,
+            0,
+            _metadata,
+            _executionAddress,
+            _executionValue,
+            _executionData
           );
-          semaphore.deactivateExternalNullifier(_voteId);
+
+          emit VoteInitiated(_proposalId, _metadata, _executionAddress, _executionValue, _executionData);
+        }
+
+        // If there is only one member, we can finalize the vote
+        if (identityCommitments.length == 1) {
+          finalizeVote(_proposalId);
         }
     }
 
-    //Vote
+    // Vote
     function broadcastVote(
         bytes memory _vote,
         uint256[8] memory _proof,
         uint256 _root,
         uint256 _nullifiersHash,
-        uint232 _voteId
+        uint232 _proposalId
     ) public {
-        Vote storage vote = votes[_voteId];
+        Vote storage vote = votes[_proposalId];
         //Overflow shouldn't be a problem here...
         require((vote.start + period) > block.timestamp);
         require(AssertBytes._equal(_vote, YEA) || AssertBytes._equal(_vote, NAY));
@@ -210,37 +204,60 @@ contract SemaphoreVoting is BaseRelayRecipient, Executor, Initializable, SelfAut
         }
 
         // broadcast the signal
-        semaphore.broadcastSignal(_vote, _proof, _root, _nullifiersHash, _voteId);
-        emit VoteBroadcast(_voteId, _vote);
+        semaphore.broadcastSignal(_vote, _proof, _root, _nullifiersHash, _proposalId);
+        emit VoteBroadcast(_proposalId, _vote);
 
-        //Finalize proposal. If vote hasn't passed, nothing happens
-        finalizeProposal(_voteId);
+        //Finalize vote. If vote hasn't passed, nothing happens
+        finalizeVote(_proposalId);
+    }
+
+    // End vote
+    function finalizeVote(uint232 _proposalId) public {
+      Vote storage vote = votes[_proposalId];
+      require(!vote.executed, 'Action already axecuted');
+      // If majority has voted yes, deactivate nullifier, and move to execute
+      if (vote.yes.mul(1e18).div(identityCommitments.length) >= approval) {
+        // Vote passed, deactivate nullifier
+        semaphore.deactivateExternalNullifier(_proposalId);
+      } else {
+        if (vote.start.add(period) < block.timestamp) {
+            // Time passed, deactivate nullifier
+            semaphore.deactivateExternalNullifier(_proposalId);
+            uint256 total = vote.yes.add(vote.no);
+            // If total is less that quorum, return
+            if (total < identityCommitments.length.mul(quorum).div(1e18)) return;
+            // If yes votes are less than required, return
+            if (vote.yes.mul(1e18).div(total) < approval) return;
+        } else {
+          return;
+        }
+      }
+      bool success = executeCall(
+        vote.executionAddress,
+        vote.executionValue,
+        vote.executionData,
+        gasleft()
+      );
+      if (success) {
+        vote.executed = true;
+        emit VoteExecuted(_proposalId);
+      } else {
+        emit VoteNotExecuted(_proposalId);
+      }
+    }
+
+    function executeCall(address to, uint256 value, bytes memory data, uint256 txGas)
+        internal
+        returns (bool success)
+    {
+        // solium-disable-next-line security/no-inline-assembly
+        assembly {
+            success := call(txGas, to, value, add(data, 0x20), mload(data), 0, 0)
+        }
     }
 
     function setPermissioning(bool _newPermission) public authorized{
         semaphore.setPermissioning(_newPermission);
-    }
-
-    function votePassedOutright(uint232 _voteId) public view returns (bool){
-        Vote storage vote = votes[_voteId];
-        //Checks if the vote has reached necessary approval for all possible voters
-        if (vote.yes.mul(1e18).div(identityCommitments.length) >= approval) {
-          return true;
-        }
-        return false;
-    }
-
-    function votePassedWithTimeout(uint232 _voteId) public view returns (bool){
-        Vote storage vote = votes[_voteId];
-        uint256 total = vote.yes.add(vote.no);
-        if (block.timestamp > vote.start.add(period)) {
-          if (total >= identityCommitments.length.mul(quorum).div(1e18)) {
-            if (vote.yes.mul(1e18).div(total) >= approval) {
-              return true;
-            }
-          }
-        }
-        return false;
     }
 
     function recoverFunds(IERC20 _token) external {
@@ -251,5 +268,10 @@ contract SemaphoreVoting is BaseRelayRecipient, Executor, Initializable, SelfAut
 
     function versionRecipient() external view override virtual returns (string memory){
         return "0.0.1+coeo.voting";
+    }
+
+    modifier authorized() {
+        require(msg.sender == address(this), "Method can only be called from this contract");
+        _;
     }
 }

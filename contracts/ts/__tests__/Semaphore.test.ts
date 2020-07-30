@@ -26,7 +26,6 @@ import {
 } from 'libsemaphore'
 import * as etherlime from 'etherlime-lib'
 import { config } from 'semaphore-config'
-import * as web3Utils from 'web3-utils'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as ethers from 'ethers'
@@ -34,15 +33,15 @@ import * as ethers from 'ethers'
 const NUM_LEVELS = 20
 const YES = 'YEA'
 const NO = 'NAY'
-const NEW_PROPOSAL = 'NEW'
 const EPOCH = '3600' //1 hour
 const PERIOD = '86500' //1 day
-const QUORUM = web3Utils.toWei('0.25', 'ether')
-const APPROVAL = web3Utils.toWei('0.5', 'ether')
+const QUORUM = ethers.utils.parseEther('0.25') // 25%
+const APPROVAL = ethers.utils.parseEther('0.5').add('1') // 50% + 1
 
 const votingInterface = new ethers.utils.Interface(SemaphoreVoting.abi)
 const walletInterface = new ethers.utils.Interface(CoeoWallet.abi)
 
+const provider = new ethers.providers.JsonRpcProvider('http://localhost:8545')
 const genTestAccounts = (num: number, mnemonic: string) => {
     let accounts: ethers.Wallet[] = []
 
@@ -57,6 +56,7 @@ const genTestAccounts = (num: number, mnemonic: string) => {
 
 const accounts = genTestAccounts(2, config.chain.mnemonic)
 
+let userWallet
 let semaphoreContract
 let semaphoreVotingContract
 let walletContract
@@ -91,11 +91,13 @@ describe('Semaphore', () => {
             MiMC: mimcContract.contractAddress,
         }
 
+        /*
         console.log('Deploying Semaphore Base')
         const semaphoreBaseContract = await deployer.deploy(
             Semaphore,
             libraries
         )
+        */
 
         console.log('Deploying Semaphore Voting Base')
         const semaphoreVotingBaseContract = await deployer.deploy(
@@ -109,13 +111,13 @@ describe('Semaphore', () => {
         )
 
         console.log('Deploying Coeo Proxy Factory')
-        console.log('Semaphore Base: ', semaphoreBaseContract.contractAddress)
+        //console.log('Semaphore Base: ', semaphoreBaseContract.contractAddress)
         console.log('Semaphore Voting Base: ', semaphoreVotingBaseContract.contractAddress)
         console.log('Wallet Base: ', walletBaseContract.contractAddress)
         factoryContract = await deployer.deploy(
             CoeoProxyFactory,
-            {},
-            semaphoreBaseContract.contractAddress,
+            libraries,
+            //semaphoreBaseContract.contractAddress,
             semaphoreVotingBaseContract.contractAddress,
             walletBaseContract.contractAddress
         )
@@ -134,18 +136,77 @@ describe('Semaphore', () => {
             commitments
         )
         const receipt = await tx.wait()
+        console.log('Gas used by create():', receipt.gasUsed.toString())
         //console.log(receipt.events)
         const newOrganisationEvent = receipt.events.find(event => event.event === 'NewOrganisation')
         const semaphoreAddress = newOrganisationEvent.args.semaphoreContract
         const votingAddress = newOrganisationEvent.args.votingContract
         const walletAddress = newOrganisationEvent.args.walletContract
-        //console.log('Semaphore address: ', semaphoreAddress)
-        //console.log('Voting address: ', votingAddress)
-        //console.log('Wallet address: ', walletAddress)
+        console.log('Semaphore address: ', semaphoreAddress)
+        console.log('Voting address: ', votingAddress)
+        console.log('Wallet address: ', walletAddress)
 
         semaphoreContract = await etherlime.ContractAt(Semaphore, semaphoreAddress)
         semaphoreVotingContract = await etherlime.ContractAt(SemaphoreVoting, votingAddress)
         walletContract = await etherlime.ContractAt(CoeoWallet, walletAddress)
+
+        const signer = provider.getSigner()
+        await signer.sendTransaction({
+            to: walletContract.contractAddress,
+            value: ethers.utils.parseEther('5.0')
+        });
+
+        const balance = await provider.getBalance(walletContract.contractAddress)
+        console.log('Wallet contract balance: ', balance.toString())
+        expect(balance).toEqual(ethers.utils.parseEther('5.0'))
+
+        /*
+        console.log('Deploying Semaphore Base')
+        semaphoreContract = await deployer.deploy(
+            Semaphore,
+            libraries
+        )
+
+        console.log('Deploying Semaphore Voting Base')
+        semaphoreVotingContract = await deployer.deploy(
+            SemaphoreVoting,
+            {}
+        )
+
+        console.log('Deploying Wallet Base')
+        walletContract = await deployer.deploy(
+            CoeoWallet
+        )
+
+        await (await semaphoreContract.initialize(
+            NUM_LEVELS,
+            0,
+            semaphoreVotingContract.contractAddress
+        )).wait()
+
+        await (await walletContract.initialize(
+            semaphoreVotingContract.contractAddress,
+            accounts[0].address
+        )).wait()
+
+        console.log('Get identity')
+        originalIdentity = genIdentity()
+        originalIdentityCommitment = genIdentityCommitment(originalIdentity)
+        insertedIdentityCommitments.push('0x' + originalIdentityCommitment.toString(16))
+        const commitments = [originalIdentityCommitment.toString()]
+        console.log('Initialize voting')
+        const tx = await semaphoreVotingContract.initialize(
+            semaphoreContract.contractAddress,
+            walletContract.contractAddress,
+            0,
+            EPOCH,
+            PERIOD,
+            QUORUM,
+            APPROVAL,
+            commitments
+        )
+        const receipt = await tx.wait()
+        */
     })
 
     test('Semaphore belongs to the correct owner', async () => {
@@ -183,47 +244,190 @@ describe('Semaphore', () => {
       let proof
       let publicSignals
       let params
+      let currentProposalId
+      let leaves
 
-      test('create a proposal', async () => {
+      test('create a proposal for new member', async () => {
         identity = genIdentity()
         identityCommitment = genIdentityCommitment(identity)
 
-        const nextProposalId = await semaphoreVotingContract.nextProposalId()
-        const leaves = await semaphoreVotingContract.getIdentityCommitments()
+        currentProposalId = await semaphoreVotingContract.nextProposalId()
+        leaves = await semaphoreVotingContract.getIdentityCommitments()
+
+        const metadata = `Add new member: ${identityCommitment.toString()}`
+        const executionData = votingInterface.functions.addMember.encode([identityCommitment.toString()])
 
         const result = await genWitness(
-            NEW_PROPOSAL,
+            metadata,
             circuit,
             originalIdentity,
             leaves,
             NUM_LEVELS,
-            nextProposalId,
+            currentProposalId,
         )
         proof = await genProof(result.witness, provingKey)
         publicSignals = genPublicSignals(result.witness, circuit)
         params = genBroadcastSignalParams(result, proof, publicSignals)
-        console.log('Params: ', params.root)
 
-        const executionData = votingInterface.functions.addMember.encode([identityCommitment.toString()])
-
-        const tx = await semaphoreVotingContract.newProposal(
-            ethers.utils.toUtf8Bytes(NEW_PROPOSAL),
-            params.proof,
-            params.root,
-            params.nullifiersHash,
-            nextProposalId,
+        const tx = await semaphoreVotingContract.broadcastProposal(
+            ethers.utils.toUtf8Bytes(metadata),
             executionData,
             semaphoreVotingContract.contractAddress,
             0,
-            'Add new member',
-            { gasLimit: 1000000 },
+            params.proof,
+            params.root,
+            params.nullifiersHash,
+            currentProposalId,
+            { gasLimit: 3000000 },
         )
+
+        //const tx = await semaphoreVotingContract.callVoting(semaphoreVotingContract.contractAddress, 0, executionData)
         const receipt = await tx.wait()
         expect(receipt.status).toEqual(1)
-        console.log('Gas used by broadcastSignal():', receipt.gasUsed.toString())
+        console.log('Gas used by broadcastProposal():', receipt.gasUsed.toString())
 
-        expect(hasEvent(receipt, semaphoreVotingContract, 'ProposalBroadcast')).toBeTruthy()
+        //console.log(receipt)
         expect(hasEvent(receipt, semaphoreVotingContract, 'VoteInitiated')).toBeTruthy()
+        expect(hasEvent(receipt, semaphoreVotingContract, 'VoteExecuted')).toBeTruthy()
+        expect(hasEvent(receipt, semaphoreVotingContract, 'MemberAdded')).toBeTruthy()
+
+        const numInserted = await semaphoreContract.getNumIdentityCommitments()
+        expect(numInserted.toString()).toEqual('2')
+      })
+
+      test('attempt to vote on deactivated nullifier', async () => {
+        try {
+          leaves = await semaphoreVotingContract.getIdentityCommitments()
+
+          const result = await genWitness(
+              YES,
+              circuit,
+              identity,
+              leaves,
+              NUM_LEVELS,
+              currentProposalId,
+          )
+
+          proof = await genProof(result.witness, provingKey)
+          publicSignals = genPublicSignals(result.witness, circuit)
+          params = genBroadcastSignalParams(result, proof, publicSignals)
+
+          const tx = await semaphoreVotingContract.broadcastVote(
+              ethers.utils.toUtf8Bytes(YES),
+              params.proof,
+              params.root,
+              params.nullifiersHash,
+              params.externalNullifier,
+              { gasLimit: 3000000 },
+          )
+        } catch (e) {
+            expect(e.message.endsWith('Semaphore: external nullifier not found')).toBeTruthy()
+        }
+      })
+
+      test('propose to send funds from wallet', async () => {
+        await provider.send('evm_increaseTime', [3601]) //Progress beyond epoch
+        currentProposalId = await semaphoreVotingContract.nextProposalId()
+        leaves = await semaphoreVotingContract.getIdentityCommitments()
+
+        const metadata = `Send ${1} ETH to ${accounts[0].address}`
+        const executionData = walletInterface.functions.execute.encode([0, accounts[1].address, ethers.utils.parseEther('1.0'), '0x0'])
+
+        const result = await genWitness(
+            metadata,
+            circuit,
+            identity,
+            leaves,
+            NUM_LEVELS,
+            currentProposalId,
+        )
+        proof = await genProof(result.witness, provingKey)
+        publicSignals = genPublicSignals(result.witness, circuit)
+        params = genBroadcastSignalParams(result, proof, publicSignals)
+
+        const tx = await semaphoreVotingContract.broadcastProposal(
+            ethers.utils.toUtf8Bytes(metadata),
+            executionData,
+            walletContract.contractAddress,
+            0,
+            params.proof,
+            params.root,
+            params.nullifiersHash,
+            params.externalNullifier,
+            { gasLimit: 3000000 },
+        )
+
+        const receipt = await tx.wait()
+        expect(receipt.status).toEqual(1)
+        console.log('Gas used by broadcastProposal():', receipt.gasUsed.toString())
+
+        expect(hasEvent(receipt, semaphoreVotingContract, 'VoteInitiated')).toBeTruthy()
+      })
+
+      test('attempt to double vote and fail', async () => {
+        try {
+          const result = await genWitness(
+              YES,
+              circuit,
+              identity,
+              leaves,
+              NUM_LEVELS,
+              currentProposalId,
+          )
+
+          proof = await genProof(result.witness, provingKey)
+          publicSignals = genPublicSignals(result.witness, circuit)
+          params = genBroadcastSignalParams(result, proof, publicSignals)
+
+          const tx = await semaphoreVotingContract.broadcastVote(
+              ethers.utils.toUtf8Bytes(YES),
+              params.proof,
+              params.root,
+              params.nullifiersHash,
+              params.externalNullifier,
+              { gasLimit: 3000000 },
+          )
+        } catch (e) {
+            expect(e.message.endsWith('Semaphore: nullifier already seen')).toBeTruthy()
+        }
+      })
+
+      test('vote for and finalize proposal', async () => {
+        const userBalanceBefore = await provider.getBalance(accounts[1].address)
+        const contractBalanceBefore = await provider.getBalance(walletContract.contractAddress)
+        const result = await genWitness(
+            YES,
+            circuit,
+            originalIdentity,
+            leaves,
+            NUM_LEVELS,
+            currentProposalId,
+        )
+
+        proof = await genProof(result.witness, provingKey)
+        publicSignals = genPublicSignals(result.witness, circuit)
+        params = genBroadcastSignalParams(result, proof, publicSignals)
+
+        const tx = await semaphoreVotingContract.broadcastVote(
+            ethers.utils.toUtf8Bytes(YES),
+            params.proof,
+            params.root,
+            params.nullifiersHash,
+            params.externalNullifier,
+            { gasLimit: 3000000 },
+        )
+
+        const receipt = await tx.wait()
+        expect(receipt.status).toEqual(1)
+        console.log('Gas used by broadcastVote():', receipt.gasUsed.toString())
+
+        expect(hasEvent(receipt, semaphoreVotingContract, 'VoteBroadcast')).toBeTruthy()
+        expect(hasEvent(receipt, semaphoreVotingContract, 'VoteExecuted')).toBeTruthy()
+
+        const userBalanceAfter = await provider.getBalance(accounts[1].address)
+        const contractBalanceAfter = await provider.getBalance(walletContract.contractAddress)
+        expect(userBalanceAfter.sub(userBalanceBefore)).toEqual(ethers.utils.parseEther('1.0'))
+        expect(contractBalanceBefore.sub(contractBalanceAfter)).toEqual(ethers.utils.parseEther('1.0'))
       })
     })
 
