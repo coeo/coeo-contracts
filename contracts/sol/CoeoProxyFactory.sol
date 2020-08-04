@@ -13,13 +13,15 @@ interface ISemaphoreVoting {
     uint256 _period,
     uint256 _quorum,
     uint256 _approval,
-    uint256[] calldata _identityCommitments
+    address[] calldata _members
   ) external;
 }
 
 contract CoeoProxyFactory is BaseRelayRecipient{
   address semaphoreVoting;
   address wallet;
+
+  mapping(address => bool) public organisations;
 
   event NewOrganisation(address indexed creator, address indexed walletContract, address indexed votingContract, address semaphoreContract);
   event NewMember(address indexed member, address indexed votingContract);
@@ -49,10 +51,19 @@ contract CoeoProxyFactory is BaseRelayRecipient{
       _approval,
       _members
     );
+    // Register voting contract
+    organisations[address(semaphoreVotingProxy)] = true;
     emit NewOrganisation(msgSender, address(walletProxy), address(semaphoreVotingProxy), address(semaphore));
     for (uint8 i = 0; i < _members.length; i++) {
       emit NewMember(_members[i], address(semaphoreVoting));
     }
+
+  }
+
+  function registerMember(address _member) external {
+    // Only semaphore voting contracts may call this
+    require(organisations[msg.sender]);
+    emit NewMember(_member, msg.sender);
   }
 
   function versionRecipient() external view override virtual returns (string memory){

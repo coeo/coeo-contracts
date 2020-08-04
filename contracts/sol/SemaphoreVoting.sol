@@ -35,6 +35,10 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "solidity-bytes-utils/contracts/AssertBytes.sol";
 import { Semaphore } from './Semaphore.sol';
 
+interface ICoeoProxyFactory {
+  function registerMember(address _member) external;
+}
+
 contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     using SafeMath for uint256;
     //Yes signal
@@ -43,6 +47,7 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     bytes public constant NAY = 'NAY';
 
     Semaphore public semaphore;
+    ICoeoProxyFactory public proxyFactory;
     address public wallet;
 
     struct Vote {
@@ -92,7 +97,9 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     event VoteBroadcast(uint232 indexed proposalId, bytes signal);
     event VoteExecuted(uint232 indexed proposalId);
     event VoteNotExecuted(uint232 indexed proposalId);
-    event MemberAdded(uint256 indexed identityCommitment);
+    event IdentityAdded(uint256 indexed identityCommitment);
+    event MemberAdded(address indexed member);
+
 
 
     function initialize(
@@ -103,12 +110,13 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
       uint256 _period,
       uint256 _quorum,
       uint256 _approval,
-      uint256[] calldata _members
+      address[] calldata _members
     ) external initializer{
         require(_epoch >= 1 hours);
         require(_period >= 1 days);
         require(_quorum < 1e18);
         require(_approval < 1e18);
+        proxyFactory = ICoeoProxyFactory(msg.sender); //This contract assume it is being intialize by a factory
         semaphore = Semaphore(_semaphore);
         wallet = _wallet;
         nextProposalId = _firstProposalId;
@@ -118,14 +126,15 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
         approval = _approval;
         for (uint8 i = 0; i < _members.length; i++) {
           members[_members[i]] = true;
+          emit MemberAdded(_members[i]);
         }
     }
 
-    //Get members
+    //Get identity commitments
     function getIdentityCommitments() public view returns (uint256 [] memory) {
         return identityCommitments;
     }
-    //Get member
+    //Get identity commitment
     function getIdentityCommitment(uint256 _index) public view returns (uint256) {
         return identityCommitments[_index];
     }
@@ -133,11 +142,13 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     function addMember(address _member) external authorized {
       require(!members[_member]);
       members[_member] = true;
+      emit MemberAdded(_member);
+      proxyFactory.registerMember(_member);
     }
 
     function addIdentity(uint256 _leaf) external {
-      const msgSender = _msgSender()
-      require(member[msgSender]);
+      address msgSender = _msgSender();
+      require(members[msgSender]);
       require(!identities[msgSender]);
       _insertIdentity(_leaf, msgSender);
     }
@@ -145,8 +156,8 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     function _insertIdentity(uint256 _leaf, address _member) internal {
       semaphore.insertIdentity(_leaf);
       identityCommitments.push(_leaf);
-      identies[_member] = true;
-      emit MemberAdded(_leaf);
+      identities[_member] = true;
+      emit IdentityAdded(_leaf);
     }
 
     //New proposal
