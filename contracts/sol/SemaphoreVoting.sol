@@ -71,6 +71,10 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     // The minimum percentage of total votes that must vote yes for the vote to pass
     uint256 public approval;
 
+    mapping (address => bool) private members;
+
+    mapping (address => bool) private identities;
+
     // A mapping of an proposalId (external nullifier) to Vote struct
     // The proposalId is an external nullifier that members may signal their votes with
     mapping (uint232 => Vote) public votes;
@@ -99,7 +103,7 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
       uint256 _period,
       uint256 _quorum,
       uint256 _approval,
-      uint256[] calldata _identityCommitments
+      uint256[] calldata _members
     ) external initializer{
         require(_epoch >= 1 hours);
         require(_period >= 1 days);
@@ -112,8 +116,8 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
         period = _period;
         quorum = _quorum;
         approval = _approval;
-        for(uint8 i = 0; i < _identityCommitments.length; i++) {
-          _insertIdentity(_identityCommitments[i]);
+        for (uint8 i = 0; i < _members.length; i++) {
+          members[_members[i]] = true;
         }
     }
 
@@ -126,13 +130,22 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
         return identityCommitments[_index];
     }
     //Add member
-    function addMember(uint256 _leaf) external authorized{
-      _insertIdentity(_leaf);
+    function addMember(address _member) external authorized {
+      require(!members[_member]);
+      members[_member] = true;
     }
 
-    function _insertIdentity(uint256 _leaf) internal {
+    function addIdentity(uint256 _leaf) external {
+      const msgSender = _msgSender()
+      require(member[msgSender]);
+      require(!identities[msgSender]);
+      _insertIdentity(_leaf, msgSender);
+    }
+
+    function _insertIdentity(uint256 _leaf, address _member) internal {
       semaphore.insertIdentity(_leaf);
       identityCommitments.push(_leaf);
+      identies[_member] = true;
       emit MemberAdded(_leaf);
     }
 

@@ -22,13 +22,14 @@ contract CoeoProxyFactory is BaseRelayRecipient{
   address wallet;
 
   event NewOrganisation(address indexed creator, address indexed walletContract, address indexed votingContract, address semaphoreContract);
+  event NewMember(address indexed member, address indexed votingContract);
 
   constructor(address _semaphoreVoting, address _wallet) public {
     semaphoreVoting = _semaphoreVoting;
     wallet = _wallet;
   }
 
-  function create(uint232 _epoch, uint256 _period, uint256 _quorum, uint256 _approval, uint256[] calldata _identityCommitments) external {
+  function create(uint232 _epoch, uint256 _period, uint256 _quorum, uint256 _approval, address[] calldata _members) external {
     uint232 firstNullifier = uint232(block.timestamp);
     address msgSender = _msgSender();
     UpgradeabilityProxy semaphoreVotingProxy = new UpgradeabilityProxy(semaphoreVoting, '');
@@ -46,9 +47,12 @@ contract CoeoProxyFactory is BaseRelayRecipient{
       _period,
       _quorum,
       _approval,
-      _identityCommitments
+      _members
     );
     emit NewOrganisation(msgSender, address(walletProxy), address(semaphoreVotingProxy), address(semaphore));
+    for (uint8 i = 0; i < _members.length; i++) {
+      emit NewMember(_members[i], address(semaphoreVoting));
+    }
   }
 
   function versionRecipient() external view override virtual returns (string memory){
