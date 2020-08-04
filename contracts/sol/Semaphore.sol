@@ -91,12 +91,40 @@ contract Semaphore is Verifier, IncrementalMerkleTree, Ownable, Initializable {
      * @param _treeLevels The depth of the identity tree.
      * @param _firstExternalNullifier The first identity nullifier to add.
      */
+     /*
     constructor(uint8 _treeLevels, uint232 _firstExternalNullifier, address _newOwner)
         IncrementalMerkleTree(_treeLevels, NOTHING_UP_MY_SLEEVE_ZERO)
         public {
             addEn(_firstExternalNullifier, true);
             _owner = _newOwner;
             emit OwnershipTransferred(address(0), _owner);
+    }
+    */
+
+    function initialize(uint8 _treeLevels, uint232 _firstExternalNullifier, address _newOwner) external initializer {
+        addEn(_firstExternalNullifier, true);
+        _owner = _newOwner;
+        emit OwnershipTransferred(address(0), _owner);
+
+        // Limit the Merkle tree to MAX_DEPTH levels
+        require(
+            _treeLevels > 0 && _treeLevels <= MAX_DEPTH,
+            "IncrementalMerkleTree: _treeLevels must be between 0 and 33"
+        );
+
+        treeLevels = _treeLevels;
+
+        zeros[0] = NOTHING_UP_MY_SLEEVE_ZERO;
+
+        uint256 currentZero = NOTHING_UP_MY_SLEEVE_ZERO;
+        for (uint8 i = 1; i < _treeLevels; i++) {
+            uint256 hashed = hashLeftRight(currentZero, currentZero);
+            zeros[i] = hashed;
+            filledSubtrees[i] = hashed;
+            currentZero = hashed;
+        }
+
+        root = hashLeftRight(currentZero, currentZero);
     }
 
     /*

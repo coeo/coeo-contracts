@@ -81,6 +81,12 @@ describe('Semaphore', () => {
             MiMC: mimcContract.contractAddress,
         }
 
+        console.log('Deploying Semaphore Base')
+        const semaphoreBaseContract = await deployer.deploy(
+            Semaphore,
+            libraries
+        )
+
         console.log('Deploying Semaphore Voting Base')
         const semaphoreVotingBaseContract = await deployer.deploy(
             SemaphoreVoting
@@ -92,11 +98,13 @@ describe('Semaphore', () => {
         )
 
         console.log('Deploying Coeo Proxy Factory')
+        console.log('Semaphore Base: ', semaphoreBaseContract.contractAddress)
         console.log('Semaphore Voting Base: ', semaphoreVotingBaseContract.contractAddress)
         console.log('Wallet Base: ', walletBaseContract.contractAddress)
         factoryContract = await deployer.deploy(
             CoeoProxyFactory,
-            libraries,
+            {},
+            semaphoreBaseContract.contractAddress,
             semaphoreVotingBaseContract.contractAddress,
             walletBaseContract.contractAddress
         )
@@ -145,14 +153,6 @@ describe('Semaphore', () => {
         const balance = await provider.getBalance(walletContract.contractAddress)
         console.log('Wallet contract balance: ', balance.toString())
         expect(balance).toEqual(ethers.utils.parseEther('5.0'))
-
-        await factoryContract.create(
-            EPOCH,
-            PERIOD,
-            QUORUM,
-            APPROVAL,
-            members
-        )
     })
 
     test('Semaphore belongs to the correct owner', async () => {

@@ -33,8 +33,20 @@ import "./gsn/BaseRelayRecipient.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "solidity-bytes-utils/contracts/AssertBytes.sol";
-import { Semaphore } from './Semaphore.sol';
 
+interface ISemaphore {
+  function addExternalNullifier(uint232 _externalNullifier) external;
+  function deactivateExternalNullifier(uint232 _externalNullifier) external;
+  function broadcastSignal(
+      bytes calldata _signal,
+      uint256[8] calldata _proof,
+      uint256 _root,
+      uint256 _nullifiersHash,
+      uint232 _externalNullifier
+  ) external;
+  function insertIdentity(uint256 _identityCommitment) external;
+  function setPermissioning(bool _newPermission) external;
+}
 interface ICoeoProxyFactory {
   function registerMember(address _member) external;
 }
@@ -46,7 +58,7 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     //No signal
     bytes public constant NAY = 'NAY';
 
-    Semaphore public semaphore;
+    ISemaphore public semaphore;
     ICoeoProxyFactory public proxyFactory;
     address public wallet;
 
@@ -117,7 +129,7 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
         require(_quorum < 1e18);
         require(_approval < 1e18);
         proxyFactory = ICoeoProxyFactory(msg.sender); //This contract assume it is being intialize by a factory
-        semaphore = Semaphore(_semaphore);
+        semaphore = ISemaphore(_semaphore);
         wallet = _wallet;
         nextProposalId = _firstProposalId;
         epoch = _epoch;

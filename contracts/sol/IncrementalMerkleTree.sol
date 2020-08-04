@@ -60,6 +60,7 @@ contract IncrementalMerkleTree is SnarkConstants {
      *                   say that the deployer knows the preimage of an empty
      *                   leaf.
      */
+     /*
     constructor(uint8 _treeLevels, uint256 _zeroValue) internal {
         // Limit the Merkle tree to MAX_DEPTH levels
         require(
@@ -81,8 +82,8 @@ contract IncrementalMerkleTree is SnarkConstants {
            inserts or updates. e.g when we insert a value in index 1, we will
            need to look up values from those arrays to recalculate the Merkle
            root.
-        */
-        
+
+
         treeLevels = _treeLevels;
 
         zeros[0] = _zeroValue;
@@ -97,6 +98,7 @@ contract IncrementalMerkleTree is SnarkConstants {
 
         root = hashLeftRight(currentZero, currentZero);
     }
+    */
 
     /*
      * Inserts a leaf into the Merkle tree and updates the root and filled
