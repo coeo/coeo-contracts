@@ -35,10 +35,6 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "solidity-bytes-utils/contracts/AssertBytes.sol";
 import { Semaphore } from './Semaphore.sol';
 
-interface ICoeoProxyFactory {
-  function registerMember(address _member) external;
-}
-
 contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     using SafeMath for uint256;
     //Yes signal
@@ -47,7 +43,6 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     bytes public constant NAY = 'NAY';
 
     Semaphore public semaphore;
-    ICoeoProxyFactory public proxyFactory;
     address public wallet;
 
     struct Vote {
@@ -100,8 +95,6 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
     event IdentityAdded(uint256 indexed identityCommitment);
     event MemberAdded(address indexed member);
 
-
-
     function initialize(
       address _semaphore,
       address _wallet,
@@ -116,7 +109,6 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
         require(_period >= 1 days);
         require(_quorum < 1e18);
         require(_approval < 1e18);
-        proxyFactory = ICoeoProxyFactory(msg.sender); //This contract assume it is being intialize by a factory
         semaphore = Semaphore(_semaphore);
         wallet = _wallet;
         nextProposalId = _firstProposalId;
@@ -143,7 +135,6 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
       require(!members[_member]);
       members[_member] = true;
       emit MemberAdded(_member);
-      proxyFactory.registerMember(_member);
     }
 
     function addIdentity(uint256 _leaf) external {
@@ -171,7 +162,7 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
       uint256 _nullifiersHash,
       uint232 _proposalId
     ) external {
-        require((_executionAddress == address(this)) || (_executionAddress == wallet), 'Only whitelisted addresses');
+        require(_executionAddress == address(0) || _executionAddress == address(this) || _executionAddress == wallet, 'Only whitelisted addresses');
         require(_proposalId == nextProposalId, 'Must match current proposal id');
         require(uint232(block.timestamp) > nextProposalId, 'Cannot make proposal before epoch over');
 
@@ -200,11 +191,11 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
           );
 
           emit VoteInitiated(_proposalId, _metadata, _executionAddress, _executionValue, _executionData);
-        }
 
-        // If there is only one member, we can finalize the vote
-        if (identityCommitments.length == 1) {
-          finalizeVote(_proposalId);
+          // If there is only one member, we can finalize the vote
+          if (identityCommitments.length == 1) {
+            finalizeVote(_proposalId);
+          }
         }
     }
 
@@ -256,18 +247,25 @@ contract SemaphoreVoting is BaseRelayRecipient, Initializable {
           return;
         }
       }
-      bool success = executeCall(
-        vote.executionAddress,
-        vote.executionValue,
-        vote.executionData,
-        gasleft()
-      );
-      if (success) {
+      if (vote.executionAddress != address(0)) {
+        bool success = executeCall(
+          vote.executionAddress,
+          vote.executionValue,
+          vote.executionData,
+          gasleft()
+        );
+        if (success) {
+          vote.executed = true;
+          emit VoteExecuted(_proposalId);
+        } else {
+          emit VoteNotExecuted(_proposalId);
+        }
+      } else {
+        // Just a signal vote
         vote.executed = true;
         emit VoteExecuted(_proposalId);
-      } else {
-        emit VoteNotExecuted(_proposalId);
       }
+
     }
 
     function executeCall(address to, uint256 value, bytes memory data, uint256 txGas)

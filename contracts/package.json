@@ -7,6 +7,7 @@
         "watch": "tsc --watch",
         "ganache": "./scripts/runGanache.sh",
         "compileSol": "./scripts/compileSol.sh",
+        "deploy": "node ./scripts/deployer.js",
         "test-semaphore": "NODE_ENV=local-dev jest --forceExit --testPathPattern Semaphore.test.ts",
         "test-semaphore-debug": "NODE_ENV=local-dev node --inspect-brk ./node_modules/jest/bin/jest.js --testPathPattern Semaphore.test.ts",
         "test-verifier": "NODE_ENV=local-dev jest --forceExit --testPathPattern FixedVerifier.test.ts",

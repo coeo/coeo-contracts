@@ -12,7 +12,7 @@ contract CoeoPaymaster is BasePaymaster{
   constructor() public {
     _owner = msg.sender;
   }
-  
+
   function acceptRelayedCall(
       GSNTypes.RelayRequest calldata relayRequest,
       bytes calldata signature,
@@ -21,7 +21,8 @@ contract CoeoPaymaster is BasePaymaster{
   ) external override view
   returns (bytes memory) {
       (relayRequest, approvalData, maxPossibleCharge, signature);
-      require( recipients[relayRequest.target], "contract not in recipient list");
+      // **TESTING PURPOSES** ACCEPT ALL RELAYS!!
+      //require( recipients[relayRequest.target], "contract not in recipient list");
       return "";
   }
 

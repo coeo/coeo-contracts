@@ -101,9 +101,11 @@ describe('Semaphore', () => {
             walletBaseContract.contractAddress
         )
 
+        console.log('Proxy Factory: ', factoryContract.contractAddress)
+
         const members = [accounts[0].address]
 
-        console.log('Create new organisation')
+        console.log('Create new organization')
         let tx = await factoryContract.create(
             EPOCH,
             PERIOD,
@@ -113,10 +115,10 @@ describe('Semaphore', () => {
         )
         let receipt = await tx.wait()
         console.log('Gas used by create():', receipt.gasUsed.toString())
-        const newOrganisationEvent = receipt.events.find(event => event.event === 'NewOrganisation')
-        const semaphoreAddress = newOrganisationEvent.args.semaphoreContract
-        const votingAddress = newOrganisationEvent.args.votingContract
-        const walletAddress = newOrganisationEvent.args.walletContract
+        const newOrganizationEvent = receipt.events.find(event => event.event === 'NewOrganization')
+        const semaphoreAddress = newOrganizationEvent.args.semaphoreContract
+        const votingAddress = newOrganizationEvent.args.votingContract
+        const walletAddress = newOrganizationEvent.args.walletContract
         console.log('Semaphore address: ', semaphoreAddress)
         console.log('Voting address: ', votingAddress)
         console.log('Wallet address: ', walletAddress)
@@ -136,23 +138,22 @@ describe('Semaphore', () => {
         receipt = await tx.wait()
         console.log('Gas used by addIdentity():', receipt.gasUsed.toString())
 
+        const walletOwner = await walletContract.owner()
+        console.log('Wallet owner: ', walletOwner)
+
         const signer = provider.getSigner()
         await signer.sendTransaction({
             to: walletContract.contractAddress,
+            value: ethers.utils.parseEther('5.0')
+        });
+        await signer.sendTransaction({
+            to: '0xeAe275bE0783173Ee2962080b3745F9b8769B1Ee',
             value: ethers.utils.parseEther('5.0')
         });
 
         const balance = await provider.getBalance(walletContract.contractAddress)
         console.log('Wallet contract balance: ', balance.toString())
         expect(balance).toEqual(ethers.utils.parseEther('5.0'))
-
-        await factoryContract.create(
-            EPOCH,
-            PERIOD,
-            QUORUM,
-            APPROVAL,
-            members
-        )
     })
 
     test('Semaphore belongs to the correct owner', async () => {

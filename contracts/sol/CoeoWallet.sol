@@ -8,8 +8,10 @@ import "./gsn/BaseRelayRecipient.sol";
 import "@openzeppelin/contracts/cryptography/ECDSA.sol";
 
 contract CoeoWallet is BaseRelayRecipient, ERC725X, ERC725Y, IERC1271, Initializable {
-  // bytes4(keccak256("isValidSignature(bytes32,bytes)")
-  bytes4 constant internal MAGICVALUE = 0x1626ba7e;
+  using ECDSA for bytes32;
+
+  bytes4 constant internal MAGICVALUE = 0x20c13b0b;
+  bytes4 constant internal INVALID_SIGNATURE = 0xffffffff;
 
   mapping(address => bool) public approvedSigners;
 
@@ -42,27 +44,21 @@ contract CoeoWallet is BaseRelayRecipient, ERC725X, ERC725Y, IERC1271, Initializ
     approvedSigners[_signer] = false;
   }
 
-  /**
-   * @dev Should return whether the signature provided is valid for the provided data
-   * @param _data Arbitrary length data signed on the behalf of address(this)
-   * @param _signature Signature byte array associated with _data
-   *
-   * MUST return the bytes4 magic value 0x20c13b0b when function passes.
-   * MUST NOT modify state (using STATICCALL for solc < 0.5, view modifier for solc > 0.5)
-   * MUST allow external calls
-   */
   function isValidSignature(
-   bytes32 _data,
-   bytes memory _signature)
-   public
-   override
-   view
-   returns (bytes4 magicValue)
+    bytes memory _message,
+    bytes memory _signature
+  )
+    public
+    override
+    view
+    returns (bytes4 magicValue)
   {
-    bytes32 signedData = ECDSA.toEthSignedMessageHash(_data);
-    address recovered = ECDSA.recover(signedData, _signature);
-    if (approvedSigners[recovered]) {
-     return MAGICVALUE;
+    bytes32 messageHash = keccak256(abi.encodePacked(_message));
+    address signer = messageHash.recover(_signature);
+    if (approvedSigners[signer]) {
+      return MAGICVALUE;
+    } else {
+      return INVALID_SIGNATURE;
     }
   }
 
