@@ -17,6 +17,14 @@ const deploy = async () => {
       MiMC: mimcContract.contractAddress,
   }
 
+  console.log('Deploying Semaphore Base')
+  const semaphoreBaseContract = await deployer.deploy(
+      Semaphore,
+      libraries
+  )
+
+  console.log('Semaphore Base: ', semaphoreBaseContract.contractAddress)
+
   console.log('Deploying Semaphore Voting Base')
   const semaphoreVotingBaseContract = await deployer.deploy(
       SemaphoreVoting
@@ -34,7 +42,8 @@ const deploy = async () => {
   console.log('Deploying Coeo Proxy Factory')
   const factoryContract = await deployer.deploy(
       CoeoProxyFactory,
-      libraries,
+      {},
+      semaphoreBaseContract.contractAddress,
       semaphoreVotingBaseContract.contractAddress,
       walletBaseContract.contractAddress
   )

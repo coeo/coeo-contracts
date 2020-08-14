@@ -22,11 +22,10 @@
 pragma solidity ^0.6.0;
 
 import "./helpers/verifier.sol";
-import "./upgrades/Initializable.sol";
 import { IncrementalMerkleTree } from "./IncrementalMerkleTree.sol";
 import "./Ownable.sol";
 
-contract Semaphore is Verifier, IncrementalMerkleTree, Ownable, Initializable {
+contract Semaphore is Verifier, IncrementalMerkleTree, Ownable {
     // The external nullifier helps to prevent double-signalling by the same
     // user. An external nullifier can be active or deactivated.
 
@@ -71,8 +70,7 @@ contract Semaphore is Verifier, IncrementalMerkleTree, Ownable, Initializable {
     // nothing-up-my-sleeve value, the authors hope to demonstrate that they do
     // not have its preimage and therefore cannot spend funds they do not own.
 
-    uint256 public NOTHING_UP_MY_SLEEVE_ZERO =
-        uint256(keccak256(abi.encodePacked('Semaphore'))) % SNARK_SCALAR_FIELD;
+    uint256 public NOTHING_UP_MY_SLEEVE_ZERO;
 
     /*
      * If broadcastSignal is permissioned, check if msg.sender is the contract
@@ -91,12 +89,26 @@ contract Semaphore is Verifier, IncrementalMerkleTree, Ownable, Initializable {
      * @param _treeLevels The depth of the identity tree.
      * @param _firstExternalNullifier The first identity nullifier to add.
      */
+     /*
     constructor(uint8 _treeLevels, uint232 _firstExternalNullifier, address _newOwner)
         IncrementalMerkleTree(_treeLevels, NOTHING_UP_MY_SLEEVE_ZERO)
         public {
             addEn(_firstExternalNullifier, true);
             _owner = _newOwner;
             emit OwnershipTransferred(address(0), _owner);
+    }
+    */
+
+    function initialize(uint8 _treeLevels, uint232 _firstExternalNullifier, address _newOwner)
+      public
+      initializer {
+        NOTHING_UP_MY_SLEEVE_ZERO =
+            uint256(keccak256(abi.encodePacked('Semaphore'))) % SNARK_SCALAR_FIELD;
+        initMerkleTree(_treeLevels, NOTHING_UP_MY_SLEEVE_ZERO);
+
+        addEn(_firstExternalNullifier, true);
+        _owner = _newOwner;
+        emit OwnershipTransferred(address(0), _owner);
     }
 
     /*

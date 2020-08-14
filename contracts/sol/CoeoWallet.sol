@@ -53,13 +53,38 @@ contract CoeoWallet is BaseRelayRecipient, ERC725X, ERC725Y, IERC1271, Initializ
     view
     returns (bytes4 magicValue)
   {
-    bytes32 messageHash = keccak256(abi.encodePacked(_message));
-    address signer = messageHash.recover(_signature);
-    if (approvedSigners[signer]) {
-      return MAGICVALUE;
-    } else {
-      return INVALID_SIGNATURE;
-    }
+    address signer = _getEthSignedMessageHash(_message).recover(_signature);
+    magicValue = approvedSigners[signer] ? MAGICVALUE : INVALID_SIGNATURE;
+  }
+
+  // @dev Adds ETH signed message prefix to bytes message and hashes it
+  // @param _data Bytes data before adding the prefix
+  // @return Prefixed and hashed message
+  function _getEthSignedMessageHash(bytes memory _data) internal pure returns (bytes32) {
+      return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n", _uint2str(_data.length), _data));
+  }
+
+  // @dev Convert uint to string
+  // @param _num Uint to be converted
+  // @return String equivalent of the uint
+  function _uint2str(uint _num) private pure returns (string memory _uintAsString) {
+      if (_num == 0) {
+          return "0";
+      }
+      uint i = _num;
+      uint j = _num;
+      uint len;
+      while (j != 0) {
+          len++;
+          j /= 10;
+      }
+      bytes memory bstr = new bytes(len);
+      uint k = len - 1;
+      while (i != 0) {
+          bstr[k--] = byte(uint8(48 + i % 10));
+          i /= 10;
+      }
+      return string(bstr);
   }
 
   function _msgSender() internal override(BaseRelayRecipient, Context) view returns (address payable) {

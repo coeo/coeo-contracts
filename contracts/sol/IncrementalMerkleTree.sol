@@ -21,10 +21,11 @@
 
 pragma solidity ^0.6.0;
 
+import "./upgrades/Initializable.sol";
 import { SnarkConstants } from "./helpers/SnarkConstants.sol";
 import { MiMC } from "./helpers/MiMC.sol";
 
-contract IncrementalMerkleTree is SnarkConstants {
+contract IncrementalMerkleTree is SnarkConstants, Initializable {
     // The maximum tree depth
     uint8 internal constant MAX_DEPTH = 32;
 
@@ -60,7 +61,10 @@ contract IncrementalMerkleTree is SnarkConstants {
      *                   say that the deployer knows the preimage of an empty
      *                   leaf.
      */
-    constructor(uint8 _treeLevels, uint256 _zeroValue) internal {
+    function initMerkleTree(uint8 _treeLevels, uint256 _zeroValue)
+      public
+      initializer
+    {
         // Limit the Merkle tree to MAX_DEPTH levels
         require(
             _treeLevels > 0 && _treeLevels <= MAX_DEPTH,
@@ -82,7 +86,7 @@ contract IncrementalMerkleTree is SnarkConstants {
            need to look up values from those arrays to recalculate the Merkle
            root.
         */
-        
+
         treeLevels = _treeLevels;
 
         zeros[0] = _zeroValue;

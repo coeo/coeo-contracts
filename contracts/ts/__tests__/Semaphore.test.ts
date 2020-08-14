@@ -81,6 +81,12 @@ describe('Semaphore', () => {
             MiMC: mimcContract.contractAddress,
         }
 
+        console.log('Deploying Semaphore Base')
+        const semaphoreBaseContract = await deployer.deploy(
+            Semaphore,
+            libraries
+        )
+
         console.log('Deploying Semaphore Voting Base')
         const semaphoreVotingBaseContract = await deployer.deploy(
             SemaphoreVoting
@@ -91,12 +97,14 @@ describe('Semaphore', () => {
             CoeoWallet
         )
 
-        console.log('Deploying Coeo Proxy Factory')
+        console.log('Semaphore Base: ', semaphoreBaseContract.contractAddress)
         console.log('Semaphore Voting Base: ', semaphoreVotingBaseContract.contractAddress)
         console.log('Wallet Base: ', walletBaseContract.contractAddress)
+        console.log('Deploying Coeo Proxy Factory')
         factoryContract = await deployer.deploy(
             CoeoProxyFactory,
-            libraries,
+            {},
+            semaphoreBaseContract.contractAddress,
             semaphoreVotingBaseContract.contractAddress,
             walletBaseContract.contractAddress
         )
@@ -119,6 +127,7 @@ describe('Semaphore', () => {
         const semaphoreAddress = newOrganizationEvent.args.semaphoreContract
         const votingAddress = newOrganizationEvent.args.votingContract
         const walletAddress = newOrganizationEvent.args.walletContract
+
         console.log('Semaphore address: ', semaphoreAddress)
         console.log('Voting address: ', votingAddress)
         console.log('Wallet address: ', walletAddress)

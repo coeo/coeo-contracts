@@ -24,9 +24,8 @@ pragma solidity ^0.6.0;
 import { IncrementalMerkleTree } from '../IncrementalMerkleTree.sol';
 
 contract IncrementalMerkleTreeClient is IncrementalMerkleTree{
-    constructor(uint8 _treeLevels, uint256 _zeroValue)
-        IncrementalMerkleTree(_treeLevels, _zeroValue)
-        public {
+    constructor(uint8 _treeLevels, uint256 _zeroValue) public {
+          initMerkleTree(_treeLevels, _zeroValue);
     }
 
     function insertLeafAsClient(uint256 _leaf) public {

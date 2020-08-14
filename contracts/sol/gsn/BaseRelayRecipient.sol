@@ -2,7 +2,6 @@
 pragma solidity ^0.6.2;
 
 import "./0x/LibBytesV06.sol";
-
 import "./interfaces/IRelayRecipient.sol";
 
 /**
