@@ -30,8 +30,6 @@ contract Ownable is Context{
         _;
     }
 
-
-
     /**
      * @dev Returns true if the caller is the current owner.
      */
