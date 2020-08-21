@@ -16,6 +16,7 @@ contract CoeoWallet is BaseRelayRecipient, ERC725X, ERC725Y, IERC1271, Initializ
   mapping(address => bool) public approvedSigners;
 
   event NewSigner(address signer);
+  event RemovedSigner(address signer);
   event ReceivedPayment(address sender, uint256 value);
 
   function initialize(address _newOwner, address _signer) public initializer {
@@ -33,6 +34,7 @@ contract CoeoWallet is BaseRelayRecipient, ERC725X, ERC725Y, IERC1271, Initializ
     require(_signer != address(0));
     require(!approvedSigners[_signer]);
     approvedSigners[_signer] = true;
+    NewSigner(_signer);
   }
 
   function removeSigner(address _signer)
@@ -42,6 +44,7 @@ contract CoeoWallet is BaseRelayRecipient, ERC725X, ERC725Y, IERC1271, Initializ
     require(_signer != address(0));
     require(approvedSigners[_signer]);
     approvedSigners[_signer] = false;
+    RemovedSigner(_signer);
   }
 
   function isValidSignature(

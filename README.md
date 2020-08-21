@@ -79,3 +79,9 @@ npm run ganache
 npm run test-semaphore && \
 npm run test-mt
 ```
+
+# Rinkeby
+Semaphore Base:  0x17f99103f31Ff357ad59e28BF445b985b3Db5D29
+Semaphore Voting Base:  0x0e7376E92A9326Fc1c290c89d6D998dFAf94F45c
+Wallet Base:  0x5599CF80A76eC5a34628e0c605a194152952F4d8
+Proxy Factory: 0x17B77172270f0c74853c0a2bC12687E47D3eE156

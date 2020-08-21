@@ -10,6 +10,7 @@ const etherlime = require('etherlime-lib')
 const deploy = async () => {
   const deployer = new etherlime.JSONRPCPrivateKeyDeployer('privatekey', 'url');
 
+  //console.log('Deployer: ', deployer)
   console.log('Deploying MiMC')
   const mimcContract = await deployer.deploy(MiMC, {})
 
